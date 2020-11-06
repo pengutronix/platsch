@@ -485,7 +485,7 @@ int main(int argc, char *argv[])
 	bool pid1 = getpid() == 1;
 	char *dir = "/usr/share/platsch";
 	char *base = "splash";
-	int ret = 0, c;
+	int ret = 0, c, i;
 
 	if (!pid1) {
 		while ((c = getopt_long(argc, argv, "hd:b:", longopts, NULL)) != EOF) {
@@ -513,21 +513,34 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/*
-	 * XXX: Maybe use drmOpen instead?
-	 * (Where should name/busid come from?)
-	 * XXX: Loop through drm devices to find one with connectors.
-	 */
-	ret = snprintf(drmdev, sizeof(drmdev), DRM_DEV_NAME, DRM_DIR_NAME, 0);
-	if (ret >= sizeof(drmdev)) {
-		error("Huh, device name overflowed buffer\n");
-		goto execinit;
-	}
+	for (i = 0; i < 64; i++) {
+		struct drm_mode_card_res res = {0};
 
-	drmfd = open(drmdev, O_RDWR | O_CLOEXEC, 0);
-	if (drmfd < 0) {
-		error("Failed to open drm device: %m\n");
-		goto execinit;
+		/*
+		 * XXX: Maybe use drmOpen instead?
+		 * (Where should name/busid come from?)
+		 * XXX: Loop through drm devices to find one with connectors.
+		 */
+		ret = snprintf(drmdev, sizeof(drmdev), DRM_DEV_NAME, DRM_DIR_NAME, i);
+		if (ret >= sizeof(drmdev)) {
+			error("Huh, device name overflowed buffer\n");
+			goto execinit;
+		}
+
+		drmfd = open(drmdev, O_RDWR | O_CLOEXEC, 0);
+		if (drmfd < 0) {
+			error("Failed to open drm device: %m\n");
+			goto execinit;
+		}
+
+		ret = drmIoctl(drmfd, DRM_IOCTL_MODE_GETRESOURCES, &res);
+		if (ret < 0) {
+			close(drmfd);
+			continue;
+		} else {
+			/* Device found */
+			break;
+		}
 	}
 
 	ret = drmprepare(drmfd);
