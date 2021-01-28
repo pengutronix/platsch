@@ -140,6 +140,7 @@ void draw_buffer(struct modeset_dev *dev)
 	char filename[128];
 	/* XXX adapt as soon as dev->format becomes flexible */
 	const char *fmt_specifier = "RGB565";
+	ssize_t size;
 	int ret;
 
 	/*
@@ -160,13 +161,13 @@ void draw_buffer(struct modeset_dev *dev)
 		return;
 	}
 
-	ret = readfull(fd_src, dev->map, dev->size);
-	if (ret < dev->size) {
-		if (ret < 0)
+	size = readfull(fd_src, dev->map, dev->size);
+	if (size < dev->size) {
+		if (size < 0)
 			error("Failed to read from %s: %m\n", filename);
 		else
 			error("Could only read %zd/%zu bytes from %s\n",
-			      ret, dev->size, filename);
+			      size, dev->size, filename);
 	}
 
 	ret = close(fd_src);
