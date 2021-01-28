@@ -148,7 +148,7 @@ void draw_buffer(struct modeset_dev *dev)
 	 * opening an (say) PNG and convert the image data to the right format.
 	 */
 	ret = snprintf(filename, sizeof(filename),
-		       "/usr/share/platsch/splash-%dx%d-%s.bin",
+		       "/usr/share/platsch/splash-%ux%u-%s.bin",
 		       dev->width, dev->height, fmt_specifier);
 	if (ret >= sizeof(filename)) {
 		error("Failed to fit filename into buffer\n");
@@ -166,7 +166,7 @@ void draw_buffer(struct modeset_dev *dev)
 		if (size < 0)
 			error("Failed to read from %s: %m\n", filename);
 		else
-			error("Could only read %zd/%zu bytes from %s\n",
+			error("Could only read %zd/%u bytes from %s\n",
 			      size, dev->size, filename);
 	}
 
