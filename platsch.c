@@ -21,6 +21,8 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <getopt.h>
+#include <libgen.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -458,14 +460,47 @@ static int drmprepare(int fd)
 	return 0;
 }
 
+static struct option longopts[] =
+{
+	{ "help",      no_argument,       0, 'h' },
+	{ NULL,        0,                 0, 0   }
+};
+
+static void usage(const char *prog)
+{
+	error("Usage:\n"
+	      "%s [-h|--help]\n",
+	      prog);
+}
+
 int main(int argc, char *argv[])
 {
 	char **initsargv;
 	int drmfd;
 	char drmdev[128];
 	struct modeset_dev *iter;
+	bool pid1 = getpid() == 1;
+	int ret = 0, c;
 
-	int ret;
+	if (!pid1) {
+		while ((c = getopt_long(argc, argv, "h", longopts, NULL)) != EOF) {
+			switch(c) {
+			case '?':
+				/* ‘getopt_long’ already printed an error message. */
+				ret = 1;
+				/* FALLTHRU */
+			case 'h':
+				usage(basename(argv[0]));
+				exit(ret);
+			}
+		}
+
+		if (optind < argc) {
+			error("Too many arguments!\n");
+			usage(basename(argv[0]));
+			exit(1);
+		}
+	}
 
 	/*
 	 * XXX: Maybe use drmOpen instead?
@@ -515,7 +550,7 @@ int main(int argc, char *argv[])
 		error("Failed to drop master on drm device\n");
 
 execinit:
-	if (getpid() == 1) {
+	if (pid1) {
 		ret = fork();
 		if (ret < 0) {
 			error("failed to fork for init: %m\n");
