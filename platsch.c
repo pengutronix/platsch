@@ -136,7 +136,7 @@ struct modeset_dev {
 	uint32_t crtc_id;
 };
 
-void draw_buffer(struct modeset_dev *dev, char *dir)
+void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
 {
 	int fd_src;
 	char filename[128];
@@ -150,8 +150,8 @@ void draw_buffer(struct modeset_dev *dev, char *dir)
 	 * opening an (say) PNG and convert the image data to the right format.
 	 */
 	ret = snprintf(filename, sizeof(filename),
-		       "%s/splash-%ux%u-%s.bin",
-		       dir, dev->width, dev->height, fmt_specifier);
+		       "%s/%s-%ux%u-%s.bin",
+		       dir, base, dev->width, dev->height, fmt_specifier);
 	if (ret >= sizeof(filename)) {
 		error("Failed to fit filename into buffer\n");
 		return;
@@ -464,13 +464,14 @@ static struct option longopts[] =
 {
 	{ "help",      no_argument,       0, 'h' },
 	{ "directory", required_argument, 0, 'd' },
+	{ "basename",  required_argument, 0, 'b' },
 	{ NULL,        0,                 0, 0   }
 };
 
 static void usage(const char *prog)
 {
 	error("Usage:\n"
-	      "%s [-d|--directory <dir>]\n"
+	      "%s [-d|--directory <dir>] [-b|--basename <name>]\n"
 	      "   [-h|--help]\n",
 	      prog);
 }
@@ -483,13 +484,17 @@ int main(int argc, char *argv[])
 	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
 	char *dir = "/usr/share/platsch";
+	char *base = "splash";
 	int ret = 0, c;
 
 	if (!pid1) {
-		while ((c = getopt_long(argc, argv, "hd:", longopts, NULL)) != EOF) {
+		while ((c = getopt_long(argc, argv, "hd:b:", longopts, NULL)) != EOF) {
 			switch(c) {
 			case 'd':
 				dir = optarg;
+				break;
+			case 'b':
+				base = optarg;
 				break;
 			case '?':
 				/* ‘getopt_long’ already printed an error message. */
@@ -531,7 +536,7 @@ int main(int argc, char *argv[])
 	for (iter = modeset_list; iter; iter = iter->next) {
 
 		/* draw first then set the mode */
-		draw_buffer(iter, dir);
+		draw_buffer(iter, dir, base);
 
 		if (iter->setmode) {
 			debug("set crtc\n");
