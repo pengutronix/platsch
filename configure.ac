@@ -6,7 +6,7 @@ AM_INIT_AUTOMAKE([foreign dist-xz])
 AC_PROG_CC
 AC_PROG_MAKE_SET
 
-PKG_CHECK_MODULES([LIBDRM], [libdrm])
+PKG_CHECK_MODULES([LIBDRM], [libdrm >= 2.4.112])
 
 AC_CONFIG_FILES([Makefile])
 

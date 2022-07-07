@@ -81,43 +81,6 @@ ssize_t readfull(int fd, void *buf, size_t count)
 	return ret;
 }
 
-struct connectortype {
-	uint32_t id;
-	const char *name;
-};
-
-#define CONNECTORTYPE(n)	{ .id = DRM_MODE_CONNECTOR_ ## n, .name = #n }
-static const struct connectortype connectortypes[] = {
-	CONNECTORTYPE(VGA),
-	CONNECTORTYPE(DVII),
-	CONNECTORTYPE(DVID),
-	CONNECTORTYPE(DVIA),
-	CONNECTORTYPE(Composite),
-	CONNECTORTYPE(SVIDEO),
-	CONNECTORTYPE(LVDS),
-	CONNECTORTYPE(Component),
-	CONNECTORTYPE(9PinDIN),
-	CONNECTORTYPE(DisplayPort),
-	CONNECTORTYPE(HDMIA),
-	CONNECTORTYPE(HDMIB),
-	CONNECTORTYPE(TV),
-	CONNECTORTYPE(eDP),
-	CONNECTORTYPE(VIRTUAL),
-	CONNECTORTYPE(DSI),
-	CONNECTORTYPE(DPI),
-};
-
-static const char *connectortype_id2name(uint32_t id)
-{
-	size_t i;
-
-	for (i = 0; i < ARRAY_SIZE(connectortypes); ++i) {
-		if (connectortypes[i].id == id)
-			return connectortypes[i].name;
-	}
-	return "???";
-}
-
 struct modeset_dev {
 	struct modeset_dev *next;
 
@@ -426,7 +389,7 @@ static int drmprepare(int fd)
 		assert(conn->connector_id == res->connectors[i]);
 
 		debug("Connector #%u has type %s\n", conn->connector_id,
-		      connectortype_id2name(conn->connector_type));
+		      drmModeGetConnectorTypeName(conn->connector_type));
 
 		/* create a device structure */
 		dev = malloc(sizeof(*dev));
