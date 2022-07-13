@@ -20,6 +20,7 @@
  */
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
@@ -42,6 +43,16 @@
 #define error(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(*a))
+
+struct platsch_format {
+	uint32_t format;
+	uint32_t bpp;
+	const char *name;
+};
+
+static const struct platsch_format platsch_formats[] = {
+	{ DRM_FORMAT_RGB565, 16, "RGB565" }, /* default */
+};
 
 void redirect_stdfd(void)
 {
@@ -88,7 +99,7 @@ struct modeset_dev {
 	uint32_t height;
 	uint32_t stride;
 	uint32_t size;
-	uint32_t format;
+	const struct platsch_format *format;
 	uint32_t handle;
 	void *map;
 
@@ -103,8 +114,6 @@ void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
 {
 	int fd_src;
 	char filename[128];
-	/* XXX adapt as soon as dev->format becomes flexible */
-	const char *fmt_specifier = "RGB565";
 	ssize_t size;
 	int ret;
 
@@ -114,7 +123,7 @@ void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
 	 */
 	ret = snprintf(filename, sizeof(filename),
 		       "%s/%s-%ux%u-%s.bin",
-		       dir, base, dev->width, dev->height, fmt_specifier);
+		       dir, base, dev->width, dev->height, dev->format->name);
 	if (ret >= sizeof(filename)) {
 		error("Failed to fit filename into buffer\n");
 		return;
@@ -255,7 +264,7 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 	memset(&creq, 0, sizeof(creq));
 	creq.width = dev->width;
 	creq.height = dev->height;
-	creq.bpp = 16;
+	creq.bpp = dev->format->bpp;
 	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &creq);
 	if (ret < 0) {
 		error("Cannot create dumb buffer: %m\n");
@@ -265,12 +274,9 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 	dev->size = creq.size;
 	dev->handle = creq.handle;
 
-	/* XXX: determine right format? Make this configurable somehow? */
-	dev->format = DRM_FORMAT_RGB565;
-
 	/* create framebuffer object for the dumb-buffer */
 	ret = drmModeAddFB2(fd, dev->width, dev->height,
-			    dev->format,
+			    dev->format->format,
 			    (uint32_t[4]){ dev->handle, },
 			    (uint32_t[4]){ dev->stride, },
 			    (uint32_t[4]){ 0, },
@@ -317,6 +323,116 @@ err_destroy:
 	return ret;
 }
 
+/* Returns lowercase connector type names with '_' for '-' */
+static char *get_normalized_conn_type_name(uint32_t connector_type)
+{
+	int i;
+	const char *connector_name;
+	char *normalized_name;
+
+	connector_name = drmModeGetConnectorTypeName(connector_type);
+	if (!connector_name)
+		return NULL;
+
+	normalized_name = strdup(connector_name);
+
+	for (i = 0; normalized_name[i]; i++) {
+		normalized_name[i] = tolower(normalized_name[i]);
+		if (normalized_name[i] == '-')
+			normalized_name[i] = '_';
+	}
+
+	return normalized_name;
+}
+
+static const struct platsch_format *platsch_format_find(const char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(platsch_formats); i++)
+		if (!strcmp(platsch_formats[i].name, name))
+			return &platsch_formats[i];
+
+	return NULL;
+}
+
+static int set_env_connector_mode(drmModeConnector *conn,
+				  struct modeset_dev *dev)
+{
+	int ret, i = 0;
+	u_int32_t width = 0, height = 0;
+	const char *mode;
+	char *connector_type_name, mode_env_name[32], fmt_specifier[32] = "";
+	const struct platsch_format *format = NULL;
+
+	connector_type_name = get_normalized_conn_type_name(conn->connector_type);
+	if (!connector_type_name) {
+		error("could not look up name for connector type %u\n",
+		      conn->connector_type);
+		goto fallback;
+	}
+
+	ret = snprintf(mode_env_name, sizeof(mode_env_name), "platsch_%s%u_mode",
+		       connector_type_name, conn->connector_type_id);
+	free(connector_type_name);
+	if (ret >= sizeof(mode_env_name)) {
+		error("failed to fit platsch env mode variable name into buffer\n");
+		return -EFAULT;
+	}
+
+	/* check for connector mode configuration in environment */
+	debug("looking up %s env variable\n", mode_env_name);
+	mode = getenv(mode_env_name);
+	if (!mode)
+		goto fallback;
+
+	/* format suffix is optional */
+	ret = sscanf(mode, "%ux%u@%s", &width, &height, fmt_specifier);
+	if (ret < 2) {
+		error("error while scanning %s for mode\n", mode_env_name);
+		return -EFAULT;
+	}
+
+	/* use first mode matching given resolution */
+	for (i = 0; i < conn->count_modes; i++) {
+		drmModeModeInfo mode = conn->modes[i];
+		if (mode.hdisplay == width && mode.vdisplay == height) {
+			memcpy(&dev->mode, &conn->modes[i], sizeof(dev->mode));
+			dev->width = conn->modes[i].hdisplay;
+			dev->height = conn->modes[i].vdisplay;
+			break;
+		}
+	}
+
+	if (i == conn->count_modes) {
+		error("no mode available matching %ux%u\n", width, height);
+		return -ENOENT;
+	}
+
+	format = platsch_format_find(fmt_specifier);
+	if (!format) {
+		if (strlen(fmt_specifier))
+			error("unknown format specifier %s\n", fmt_specifier);
+		goto fallback_format;
+	}
+
+	dev->format = format;
+
+	return 0;
+
+fallback:
+	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
+	dev->width = conn->modes[0].hdisplay;
+	dev->height = conn->modes[0].vdisplay;
+	debug("using default mode for connector #%u\n", conn->connector_id);
+
+fallback_format:
+	dev->format = &platsch_formats[0];
+	debug("using default format %s for connector #%u\n", dev->format->name,
+	      conn->connector_id);
+
+	return 0;
+}
 
 static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
 				struct modeset_dev *dev)
@@ -335,12 +451,14 @@ static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
 		return -EFAULT;
 	}
 
-	/* copy the mode information into our device structure */
-	memcpy(&dev->mode, &conn->modes[0], sizeof(dev->mode));
-	dev->width = conn->modes[0].hdisplay;
-	dev->height = conn->modes[0].vdisplay;
-	debug("mode for connector #%u is %ux%u\n",
-	      conn->connector_id, dev->width, dev->height);
+	/* configure mode information in our device structure */
+	ret = set_env_connector_mode(conn, dev);
+	if (ret) {
+		error("no valid mode for connector #%u\n", conn->connector_id);
+		return ret;
+	}
+	debug("mode for connector #%u is %ux%u@%s\n",
+	      conn->connector_id, dev->width, dev->height, dev->format->name);
 
 	/* find a crtc for this connector */
 	ret = drmprepare_crtc(fd, res, conn, dev);
