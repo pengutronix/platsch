@@ -52,6 +52,7 @@ struct platsch_format {
 
 static const struct platsch_format platsch_formats[] = {
 	{ DRM_FORMAT_RGB565, 16, "RGB565" }, /* default */
+	{ DRM_FORMAT_XRGB8888, 32, "XRGB8888" },
 };
 
 void redirect_stdfd(void)
