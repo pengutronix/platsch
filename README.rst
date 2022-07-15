@@ -124,3 +124,15 @@ git-config manpage for the option ``format.subjectPrefix``).
 Mails sent to this mailing list are also archived at::
 
   https://lore.pengutronix.de/oss-tools
+
+This project uses the Developer's Certificate of Origin, as stated in the file
+DCO bundled with this software, using the same process as for the Linux kernel::
+
+  https://www.kernel.org/doc/html/latest/process/submitting-patches.html#sign-your-work-the-developer-s-certificate-of-origin
+
+By adding a Signed-off-by line (e.g. using ``git commit -s``) saying::
+
+  Signed-off-by: Random J Developer <random@developer.example.org>
+
+(using your real name and e-mail address), you state that your contributions
+are in line with the DCO.
