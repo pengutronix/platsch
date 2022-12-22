@@ -1,4 +1,4 @@
-EXTRA_DIST = README.devel
+EXTRA_DIST = README.rst
 
 sbin_PROGRAMS = platsch
 
