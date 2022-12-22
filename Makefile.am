@@ -1,4 +1,4 @@
-EXTRA_DIST = README.rst
+EXTRA_DIST = README.rst LICENSE
 
 sbin_PROGRAMS = platsch
 
