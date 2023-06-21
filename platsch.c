@@ -398,9 +398,9 @@ static int set_env_connector_mode(drmModeConnector *conn,
 	for (i = 0; i < conn->count_modes; i++) {
 		drmModeModeInfo mode = conn->modes[i];
 		if (mode.hdisplay == width && mode.vdisplay == height) {
-			memcpy(&dev->mode, &conn->modes[i], sizeof(dev->mode));
-			dev->width = conn->modes[i].hdisplay;
-			dev->height = conn->modes[i].vdisplay;
+			memcpy(&dev->mode, &mode, sizeof(dev->mode));
+			dev->width = width;
+			dev->height = height;
 			break;
 		}
 	}
