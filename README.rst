@@ -1,7 +1,7 @@
 platsch - Splash Screen Application
 ===================================
 
-platsch is a simple splash screen application meant to be run as pid 1
+platsch is a simple splash screen application meant to be run as PID 1
 (``init=/usr/sbin/platsch``).
 
 The image to be displayed for each DRM connector is expected here::
@@ -11,15 +11,15 @@ The image to be displayed for each DRM connector is expected here::
 By default platsch uses the first mode on each DRM connector. ``<format>``
 defaults to ``RGB565``. See below how to change that behavior.
 
-Splash screen image must have the specified resolution and format. See
+Splash screen images must have the specified resolution and format. See
 below how to generate them.
 
 After displaying the splash screen(s), platsch forks, sending its child to
 sleep to keep the DRM device open and the splash image(s) on the display(s).
-Finally platsch gives pid 1 to ``/sbin/init``. Later another application can
+Finally platsch gives PID 1 to ``/sbin/init``. Later another application can
 simply take over.
 
-Seamless transitions are possible (e.g. to *weston* having the same image
+Seamless transitions are possible (e.g. to *Weston* having the same image
 configured as background). Depending on the SoC used, the same format might be
 required to achieve that.
 
@@ -100,11 +100,11 @@ Or a resolution of 1920x1080 and ``XRGB8888`` format on ``LVDS-2``::
   platsch_lvds2_mode=1920x1080@XRGB8888
 
 The kernel passes unrecognized key-value parameters not containing dots into
-init’s environment, see
+init's environment, see
 `Kernel Parameter Documentation <https://www.kernel.org/doc/html/latest/admin-guide/kernel-parameters.html>`_.
-Therefore the above setting can be supplied via the kernel cmdline. This also
-allows dynamic use cases where the bootloader decides which resolution/mode to
-use on which connector.
+Therefore the above settings can be supplied via the kernel commandline. This
+also allows dynamic use cases where the bootloader decides which resolution/mode
+to use on which connector.
 
 Debugging
 ---------
