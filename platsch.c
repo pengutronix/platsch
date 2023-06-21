@@ -565,8 +565,8 @@ int main(int argc, char *argv[])
 	char drmdev[128];
 	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
-	char *dir = "/usr/share/platsch";
-	char *base = "splash";
+	const char *dir = "/usr/share/platsch";
+	const char *base = "splash";
 	int ret = 0, c, i;
 
 	if (!pid1) {
