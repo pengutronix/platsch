@@ -567,7 +567,16 @@ int main(int argc, char *argv[])
 	bool pid1 = getpid() == 1;
 	const char *dir = "/usr/share/platsch";
 	const char *base = "splash";
+	const char *env;
 	int ret = 0, c, i;
+
+	env = getenv("platsch_directory");
+	if (env)
+		dir = env;
+
+	env = getenv("platsch_basename");
+	if (env)
+		base = env;
 
 	if (!pid1) {
 		while ((c = getopt_long(argc, argv, "hd:b:", longopts, NULL)) != EOF) {

@@ -74,6 +74,12 @@ file::
 Configuration
 -------------
 
+The directory searched for the splash images (default: ``/usr/share/platsch``),
+as well as the image files' basename (default: ``splash``) can be controlled via
+the environment variables ``platsch_directory`` and ``platsch_basename`` (which
+in the case of PID != 1 would be overridden by the corresponding commandline
+parameters, see further downwards).
+
 For each connector a corresponding environment variable is looked up::
 
   platsch_<connector-type-name><connector-type-id>_mode
@@ -105,11 +111,9 @@ Debugging
 
 For debugging purposes, platsch recognizes a couple of command line arguments:
 
-``--directory`` or ``-d`` sets the directory containing the splash screens
-(default: ``/usr/share/platsch``).
+``--directory`` or ``-d`` sets the directory containing the splash screens.
 
-``--basename`` or ``-b`` sets the prefix of the splash screen file names
-(default: ``splash``).
+``--basename`` or ``-b`` sets the prefix of the splash screen file names.
 
 Contributing
 ------------
