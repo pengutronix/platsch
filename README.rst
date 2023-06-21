@@ -106,10 +106,11 @@ Therefore the above settings can be supplied via the kernel commandline. This
 also allows dynamic use cases where the bootloader decides which resolution/mode
 to use on which connector.
 
-Debugging
----------
+Commandline Arguments
+---------------------
 
-For debugging purposes, platsch recognizes a couple of command line arguments:
+If the program is used in later Linux userspace (PID != 1), platsch recognizes a
+couple of command line arguments:
 
 ``--directory`` or ``-d`` sets the directory containing the splash screens.
 
