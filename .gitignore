@@ -1,15 +1,1 @@
-/*.o
-/aclocal.m4
-/autom4te.cache
 /build
-/compile
-/config.log
-/config.status
-/configure
-/depcomp
-/.deps
-/install-sh
-/Makefile
-/Makefile.in
-/missing
-/platsch
