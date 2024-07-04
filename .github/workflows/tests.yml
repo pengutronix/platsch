@@ -1,0 +1,24 @@
+name: tests
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Inspect environment
+      run: |
+        gcc --version
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        DEBIAN_FRONTEND='noninteractive' sudo apt-get install -qy meson libtool libdrm-dev
+
+    - uses: actions/checkout@v4
+
+    - name: Build
+      run: |
+        meson setup build # enable -Dwerror=true later
+        meson configure build
+        meson compile -C build
