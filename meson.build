@@ -3,7 +3,7 @@ project(
   'c',
   version : '2019.12.0',
   default_options : [
-    'warning_level=1',
+    'warning_level=2',
   ],
   license : '0BSD',
 )
