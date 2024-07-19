@@ -164,7 +164,7 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 {
 	drmModeEncoder *enc;
 	unsigned int i, j;
-	int32_t crtc_id;
+	uint32_t crtc_id;
 	struct modeset_dev *iter;
 
 	/* first try the currently connected encoder+crtc */
@@ -184,16 +184,16 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 	if (enc) {
 		if (enc->crtc_id) {
 			crtc_id = enc->crtc_id;
-			assert(crtc_id >= 0);
+			bool in_use = false;
 
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
-					crtc_id = -1;
+					in_use = true;
 					break;
 				}
 			}
 
-			if (crtc_id > 0) {
+			if (!in_use) {
 				debug("encoder #%d uses crtc #%d\n",
 				      enc->encoder_id, enc->crtc_id);
 				drmModeFreeEncoder(enc);
@@ -226,6 +226,8 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 
 		/* iterate all global CRTCs */
 		for (j = 0; j < res->count_crtcs; ++j) {
+			bool in_use = false;
+
 			/* check whether this CRTC works with the encoder */
 			if (!(enc->possible_crtcs & (1 << j)))
 				continue;
@@ -234,13 +236,13 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			crtc_id = res->crtcs[j];
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
-					crtc_id = -1;
+					in_use = true;
 					break;
 				}
 			}
 
 			/* we have found a CRTC, so save it and return */
-			if (crtc_id >= 0) {
+			if (!in_use) {
 				debug("encoder #%d will use crtc #%d\n",
 				      enc->encoder_id, crtc_id);
 				drmModeFreeEncoder(enc);
