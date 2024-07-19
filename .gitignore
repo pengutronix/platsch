@@ -1,6 +1,7 @@
 /*.o
 /aclocal.m4
 /autom4te.cache
+/build
 /compile
 /config.log
 /config.status
