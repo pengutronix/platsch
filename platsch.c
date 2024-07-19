@@ -163,7 +163,7 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			   struct modeset_dev *dev)
 {
 	drmModeEncoder *enc;
-	unsigned int i, j;
+	int i, j;
 	uint32_t crtc_id;
 	struct modeset_dev *iter;
 
@@ -497,7 +497,7 @@ static int drmprepare(int fd)
 {
 	drmModeRes *res;
 	drmModeConnector *conn;
-	unsigned int i;
+	int i;
 	struct modeset_dev *dev;
 	int ret;
 
