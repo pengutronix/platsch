@@ -24,7 +24,6 @@
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
