@@ -353,7 +353,7 @@ static char *get_normalized_conn_type_name(uint32_t connector_type)
 
 static const struct platsch_format *platsch_format_find(const char *name)
 {
-	int i;
+	unsigned i;
 
 	for (i = 0; i < ARRAY_SIZE(platsch_formats); i++)
 		if (!strcmp(platsch_formats[i].name, name))
