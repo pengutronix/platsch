@@ -110,7 +110,7 @@ struct modeset_dev {
 	uint32_t crtc_id;
 };
 
-void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
+void draw_buffer(struct modeset_dev *dev, const char *dir, const char *base)
 {
 	int fd_src;
 	char filename[128];
