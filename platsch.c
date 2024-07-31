@@ -655,6 +655,25 @@ static void platsch_draw(struct platsch_ctx *ctx)
 	}
 }
 
+static void platsch_destroy_ctx(struct platsch_ctx *ctx)
+{
+	struct modeset_dev *mode, *next;
+	int ret;
+
+	ret = drmDropMaster(ctx->drmfd);
+	if (ret)
+		error("Failed to drop master on drm device\n");
+
+	for (mode = ctx->modeset_list; mode;) {
+		next = mode->next;
+		free(mode);
+		mode = next;
+	}
+	free(ctx->dir);
+	free(ctx->base);
+	free(ctx);
+}
+
 static struct option longopts[] =
 {
 	{ "help",      no_argument,       0, 'h' },
@@ -721,13 +740,7 @@ int main(int argc, char *argv[])
 
 	platsch_draw(ctx);
 
-	ret = drmDropMaster(ctx->drmfd);
-	if (ret)
-		error("Failed to drop master on drm device\n");
-
-	free(ctx->dir);
-	free(ctx->base);
-	free(ctx);
+	platsch_destroy_ctx(ctx);
 
 	if (pid1) {
 		ret = fork();
