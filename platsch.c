@@ -626,6 +626,35 @@ err_out:
 	return NULL;
 }
 
+static void platsch_draw(struct platsch_ctx *ctx)
+{
+	struct modeset_dev *iter;
+	int ret;
+
+	for (iter = ctx->modeset_list; iter; iter = iter->next) {
+
+		/* draw first then set the mode */
+		draw_buffer(iter, ctx->dir, ctx->base);
+
+		if (iter->setmode) {
+			debug("set crtc\n");
+
+			ret = drmModeSetCrtc(ctx->drmfd, iter->crtc_id, iter->fb_id,
+					     0, 0, &iter->conn_id, 1, &iter->mode);
+			if (ret)
+				error("Cannot set CRTC for connector #%u: %m\n",
+				      iter->conn_id);
+		} else {
+			debug("page flip\n");
+			ret = drmModePageFlip(ctx->drmfd, iter->crtc_id, iter->fb_id,
+					      0, NULL);
+			if (ret)
+				error("Page flip failed on connector #%u: %m\n",
+				      iter->conn_id);
+		}
+	}
+}
+
 static struct option longopts[] =
 {
 	{ "help",      no_argument,       0, 'h' },
@@ -646,7 +675,6 @@ int main(int argc, char *argv[])
 {
 	char **initsargv;
 	struct platsch_ctx *ctx;
-	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
 	const char *dir = "/usr/share/platsch";
 	const char *base = "splash";
@@ -691,28 +719,7 @@ int main(int argc, char *argv[])
 	if (!ctx)
 		return EXIT_FAILURE;
 
-	for (iter = ctx->modeset_list; iter; iter = iter->next) {
-
-		/* draw first then set the mode */
-		draw_buffer(iter, ctx->dir, ctx->base);
-
-		if (iter->setmode) {
-			debug("set crtc\n");
-
-			ret = drmModeSetCrtc(ctx->drmfd, iter->crtc_id, iter->fb_id,
-					     0, 0, &iter->conn_id, 1, &iter->mode);
-			if (ret)
-				error("Cannot set CRTC for connector #%u: %m\n",
-				      iter->conn_id);
-		} else {
-			debug("page flip\n");
-			ret = drmModePageFlip(ctx->drmfd, iter->crtc_id, iter->fb_id,
-					      0, NULL);
-			if (ret)
-				error("Page flip failed on connector #%u: %m\n",
-				      iter->conn_id);
-		}
-	}
+	platsch_draw(ctx);
 
 	ret = drmDropMaster(ctx->drmfd);
 	if (ret)
