@@ -19,12 +19,13 @@
  * https://raw.githubusercontent.com/dvdhrm/docs/master/drm-howto/modeset.c
  */
 
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -111,10 +112,10 @@ struct modeset_dev {
 	uint32_t crtc_id;
 };
 
-void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
+void draw_buffer(struct modeset_dev *dev, const char *dir, const char *base)
 {
 	int fd_src;
-	char filename[128];
+	char *filename;
 	ssize_t size;
 	int ret;
 
@@ -122,18 +123,17 @@ void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
 	 * make it easy and load a raw file in the right format instead of
 	 * opening an (say) PNG and convert the image data to the right format.
 	 */
-	ret = snprintf(filename, sizeof(filename),
-		       "%s/%s-%ux%u-%s.bin",
+	ret = asprintf(&filename, "%s/%s-%ux%u-%s.bin",
 		       dir, base, dev->width, dev->height, dev->format->name);
-	if (ret >= sizeof(filename)) {
-		error("Failed to fit filename into buffer\n");
+	if (ret < 0) {
+		error("Failed to allocate filename buffer\n");
 		return;
 	}
 
 	fd_src = open(filename, O_RDONLY | O_CLOEXEC);
 	if (fd_src < 0) {
 		error("Failed to open %s: %m\n", filename);
-		return;
+		goto out;
 	}
 
 	size = readfull(fd_src, dev->map, dev->size);
@@ -151,6 +151,9 @@ void draw_buffer(struct modeset_dev *dev, char *dir, char *base)
 		error("Failed to close image file\n");
 	}
 
+out:
+	free(filename);
+
 	return;
 }
 
@@ -160,8 +163,8 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			   struct modeset_dev *dev)
 {
 	drmModeEncoder *enc;
-	unsigned int i, j;
-	int32_t crtc_id;
+	int i, j;
+	uint32_t crtc_id;
 	struct modeset_dev *iter;
 
 	/* first try the currently connected encoder+crtc */
@@ -181,16 +184,16 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 	if (enc) {
 		if (enc->crtc_id) {
 			crtc_id = enc->crtc_id;
-			assert(crtc_id >= 0);
+			bool in_use = false;
 
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
-					crtc_id = -1;
+					in_use = true;
 					break;
 				}
 			}
 
-			if (crtc_id > 0) {
+			if (!in_use) {
 				debug("encoder #%d uses crtc #%d\n",
 				      enc->encoder_id, enc->crtc_id);
 				drmModeFreeEncoder(enc);
@@ -223,6 +226,8 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 
 		/* iterate all global CRTCs */
 		for (j = 0; j < res->count_crtcs; ++j) {
+			bool in_use = false;
+
 			/* check whether this CRTC works with the encoder */
 			if (!(enc->possible_crtcs & (1 << j)))
 				continue;
@@ -231,13 +236,13 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			crtc_id = res->crtcs[j];
 			for (iter = modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
-					crtc_id = -1;
+					in_use = true;
 					break;
 				}
 			}
 
 			/* we have found a CRTC, so save it and return */
-			if (crtc_id >= 0) {
+			if (!in_use) {
 				debug("encoder #%d will use crtc #%d\n",
 				      enc->encoder_id, crtc_id);
 				drmModeFreeEncoder(enc);
@@ -348,7 +353,7 @@ static char *get_normalized_conn_type_name(uint32_t connector_type)
 
 static const struct platsch_format *platsch_format_find(const char *name)
 {
-	int i;
+	unsigned i;
 
 	for (i = 0; i < ARRAY_SIZE(platsch_formats); i++)
 		if (!strcmp(platsch_formats[i].name, name))
@@ -363,7 +368,7 @@ static int set_env_connector_mode(drmModeConnector *conn,
 	int ret, i = 0;
 	u_int32_t width = 0, height = 0;
 	const char *mode;
-	char *connector_type_name, mode_env_name[32], fmt_specifier[32] = "";
+	char *connector_type_name, *mode_env_name = NULL, fmt_specifier[32] = "";
 	const struct platsch_format *format = NULL;
 
 	connector_type_name = get_normalized_conn_type_name(conn->connector_type);
@@ -373,12 +378,12 @@ static int set_env_connector_mode(drmModeConnector *conn,
 		goto fallback;
 	}
 
-	ret = snprintf(mode_env_name, sizeof(mode_env_name), "platsch_%s%u_mode",
+	ret = asprintf(&mode_env_name, "platsch_%s%u_mode",
 		       connector_type_name, conn->connector_type_id);
 	free(connector_type_name);
-	if (ret >= sizeof(mode_env_name)) {
-		error("failed to fit platsch env mode variable name into buffer\n");
-		return -EFAULT;
+	if (ret < 0) {
+		error("failed to allocate platsch env mode variable\n");
+		return -ENOMEM;
 	}
 
 	/* check for connector mode configuration in environment */
@@ -391,7 +396,8 @@ static int set_env_connector_mode(drmModeConnector *conn,
 	ret = sscanf(mode, "%ux%u@%s", &width, &height, fmt_specifier);
 	if (ret < 2) {
 		error("error while scanning %s for mode\n", mode_env_name);
-		return -EFAULT;
+		ret = -EFAULT;
+		goto err_out;
 	}
 
 	/* use first mode matching given resolution */
@@ -407,7 +413,8 @@ static int set_env_connector_mode(drmModeConnector *conn,
 
 	if (i == conn->count_modes) {
 		error("no mode available matching %ux%u\n", width, height);
-		return -ENOENT;
+		ret = -ENOENT;
+		goto err_out;
 	}
 
 	format = platsch_format_find(fmt_specifier);
@@ -418,6 +425,8 @@ static int set_env_connector_mode(drmModeConnector *conn,
 	}
 
 	dev->format = format;
+
+	free(mode_env_name);
 
 	return 0;
 
@@ -432,7 +441,12 @@ fallback_format:
 	debug("using default format %s for connector #%u\n", dev->format->name,
 	      conn->connector_id);
 
-	return 0;
+	ret = 0;
+
+err_out:
+	free(mode_env_name);
+
+	return ret;
 }
 
 static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
@@ -483,7 +497,7 @@ static int drmprepare(int fd)
 {
 	drmModeRes *res;
 	drmModeConnector *conn;
-	unsigned int i;
+	int i;
 	struct modeset_dev *dev;
 	int ret;
 
@@ -562,7 +576,6 @@ int main(int argc, char *argv[])
 {
 	char **initsargv;
 	int drmfd;
-	char drmdev[128];
 	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
 	const char *dir = "/usr/share/platsch";
@@ -606,19 +619,21 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < 64; i++) {
 		struct drm_mode_card_res res = {0};
+		char *drmdev;
 
 		/*
 		 * XXX: Maybe use drmOpen instead?
 		 * (Where should name/busid come from?)
 		 * XXX: Loop through drm devices to find one with connectors.
 		 */
-		ret = snprintf(drmdev, sizeof(drmdev), DRM_DEV_NAME, DRM_DIR_NAME, i);
-		if (ret >= sizeof(drmdev)) {
-			error("Huh, device name overflowed buffer\n");
+		ret = asprintf(&drmdev, DRM_DEV_NAME, DRM_DIR_NAME, i);
+		if (ret < 0) {
+			error("Huh, failed to allocate device name buffer\n");
 			goto execinit;
 		}
 
 		drmfd = open(drmdev, O_RDWR | O_CLOEXEC, 0);
+		free(drmdev);
 		if (drmfd < 0) {
 			error("Failed to open drm device: %m\n");
 			goto execinit;
