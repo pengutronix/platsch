@@ -564,6 +564,68 @@ static int drmprepare(struct platsch_ctx *ctx)
 	return 0;
 }
 
+static struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
+{
+	struct platsch_ctx *ctx;
+	int drmfd;
+	int ret;
+	int i;
+
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx) {
+		error("Cannot allocate memory for platsch_ctx\n");
+		return NULL;
+	}
+	ctx->dir = strdup(dir);
+	ctx->base = strdup(base);
+
+	for (i = 0; i < 64; i++) {
+		struct drm_mode_card_res res = {0};
+		char *drmdev;
+
+		/*
+		 * XXX: Maybe use drmOpen instead?
+		 * (Where should name/busid come from?)
+		 * XXX: Loop through drm devices to find one with connectors.
+		 */
+		ret = asprintf(&drmdev, DRM_DEV_NAME, DRM_DIR_NAME, i);
+		if (ret < 0) {
+			error("Huh, failed to allocate device name buffer\n");
+			goto err_out;
+		}
+
+		drmfd = open(drmdev, O_RDWR | O_CLOEXEC, 0);
+		free(drmdev);
+		if (drmfd < 0) {
+			error("Failed to open drm device: %m\n");
+			goto err_out;
+		}
+
+		ret = drmIoctl(drmfd, DRM_IOCTL_MODE_GETRESOURCES, &res);
+		if (ret < 0) {
+			close(drmfd);
+			continue;
+		} else {
+			/* Device found */
+			ctx->drmfd = drmfd;
+			break;
+		}
+	}
+
+	ret = drmprepare(ctx);
+	if (ret)
+		goto err_out;
+
+	return ctx;
+
+err_out:
+	free(ctx->dir);
+	free(ctx->base);
+	free(ctx);
+
+	return NULL;
+}
+
 static struct option longopts[] =
 {
 	{ "help",      no_argument,       0, 'h' },
@@ -583,14 +645,13 @@ static void usage(const char *prog)
 int main(int argc, char *argv[])
 {
 	char **initsargv;
-	int drmfd;
 	struct platsch_ctx *ctx;
 	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
 	const char *dir = "/usr/share/platsch";
 	const char *base = "splash";
 	const char *env;
-	int ret = 0, c, i;
+	int ret = 0, c;
 
 	env = getenv("platsch_directory");
 	if (env)
@@ -626,49 +687,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	ctx = calloc(1, sizeof(*ctx));
-	if (!ctx) {
-		error("Cannot allocate memory for platsch_ctx\n");
-		exit(1);
-	}
-	ctx->dir = strdup(dir);
-	ctx->base = strdup(base);
-
-	for (i = 0; i < 64; i++) {
-		struct drm_mode_card_res res = {0};
-		char *drmdev;
-
-		/*
-		 * XXX: Maybe use drmOpen instead?
-		 * (Where should name/busid come from?)
-		 * XXX: Loop through drm devices to find one with connectors.
-		 */
-		ret = asprintf(&drmdev, DRM_DEV_NAME, DRM_DIR_NAME, i);
-		if (ret < 0) {
-			error("Huh, failed to allocate device name buffer\n");
-			goto execinit;
-		}
-
-		drmfd = open(drmdev, O_RDWR | O_CLOEXEC, 0);
-		free(drmdev);
-		if (drmfd < 0) {
-			error("Failed to open drm device: %m\n");
-			goto execinit;
-		}
-
-		ret = drmIoctl(drmfd, DRM_IOCTL_MODE_GETRESOURCES, &res);
-		if (ret < 0) {
-			close(drmfd);
-			continue;
-		} else {
-			/* Device found */
-			ctx->drmfd = drmfd;
-			break;
-		}
-	}
-
-	ret = drmprepare(ctx);
-	assert(!ret);
+	ctx = platsch_create_ctx(dir, base);
+	if (!ctx)
+		return EXIT_FAILURE;
 
 	for (iter = ctx->modeset_list; iter; iter = iter->next) {
 
@@ -701,7 +722,6 @@ int main(int argc, char *argv[])
 	free(ctx->base);
 	free(ctx);
 
-execinit:
 	if (pid1) {
 		ret = fork();
 		if (ret < 0) {
