@@ -692,7 +692,7 @@ execinit:
 			goto sleep;
 		}
 
-		initsargv = calloc(sizeof(argv[0]), argc + 1);
+		initsargv = calloc(argc + 1, sizeof(argv[0]));
 		if (!initsargv) {
 			error("failed to allocate argv for init\n");
 			return EXIT_FAILURE;
