@@ -56,6 +56,24 @@ static const struct platsch_format platsch_formats[] = {
 	{ DRM_FORMAT_XRGB8888, 32, "XRGB8888" },
 };
 
+struct modeset_dev {
+	struct modeset_dev *next;
+
+	uint32_t width;
+	uint32_t height;
+	uint32_t stride;
+	uint32_t size;
+	const struct platsch_format *format;
+	uint32_t handle;
+	void *map;
+
+	bool setmode;
+	drmModeModeInfo mode;
+	uint32_t fb_id;
+	uint32_t conn_id;
+	uint32_t crtc_id;
+};
+
 static void redirect_stdfd(void)
 {
 	int devnull = open("/dev/null", O_RDWR, 0);
@@ -93,24 +111,6 @@ static ssize_t readfull(int fd, void *buf, size_t count)
 
 	return ret;
 }
-
-struct modeset_dev {
-	struct modeset_dev *next;
-
-	uint32_t width;
-	uint32_t height;
-	uint32_t stride;
-	uint32_t size;
-	const struct platsch_format *format;
-	uint32_t handle;
-	void *map;
-
-	bool setmode;
-	drmModeModeInfo mode;
-	uint32_t fb_id;
-	uint32_t conn_id;
-	uint32_t crtc_id;
-};
 
 static void draw_buffer(struct modeset_dev *dev, const char *dir, const char *base)
 {
