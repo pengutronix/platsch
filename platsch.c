@@ -531,13 +531,12 @@ static int drmprepare(struct platsch_ctx *ctx)
 		      drmModeGetConnectorTypeName(conn->connector_type));
 
 		/* create a device structure */
-		dev = malloc(sizeof(*dev));
+		dev = calloc(1, sizeof(*dev));
 		if (!dev) {
 			error("Cannot allocate memory for connector #%u: %m\n",
 			      res->connectors[i]);
 			continue;
 		}
-		memset(dev, 0, sizeof(*dev));
 		dev->conn_id = conn->connector_id;
 
 		ret = drmprepare_connector(ctx, res, conn, dev);
