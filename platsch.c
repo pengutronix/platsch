@@ -576,7 +576,13 @@ static struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
 		error("Cannot allocate memory for platsch_ctx\n");
 		return NULL;
 	}
+
+	if (!dir)
+		dir = "/usr/share/platsch";
 	ctx->dir = strdup(dir);
+
+	if (!base)
+		base = "splash";
 	ctx->base = strdup(base);
 
 	for (i = 0; i < 64; i++) {
@@ -695,8 +701,8 @@ int main(int argc, char *argv[])
 	char **initsargv;
 	struct platsch_ctx *ctx;
 	bool pid1 = getpid() == 1;
-	const char *dir = "/usr/share/platsch";
-	const char *base = "splash";
+	const char *dir = NULL;
+	const char *base = NULL;
 	const char *env;
 	int ret = 0, c;
 
