@@ -12,7 +12,7 @@ libdrm_dep = dependency('libdrm', version : '>=2.4.112')
 
 executable(
   'platsch', 
-  sources : ['platsch.c'], 
+  sources : ['platsch.c', 'libplatsch.c'],
   dependencies : [libdrm_dep],
   install : true,
   install_dir : get_option('sbindir'),
