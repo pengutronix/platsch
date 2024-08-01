@@ -74,6 +74,10 @@ struct modeset_dev {
 	uint32_t crtc_id;
 };
 
+struct platsch_ctx {
+	struct modeset_dev *modeset_list;
+};
+
 static void redirect_stdfd(void)
 {
 	int devnull = open("/dev/null", O_RDWR, 0);
@@ -157,10 +161,8 @@ out:
 	return;
 }
 
-static struct modeset_dev *modeset_list = NULL;
-
-static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
-			   struct modeset_dev *dev)
+static int drmprepare_crtc(struct platsch_ctx *ctx, int fd, drmModeRes *res,
+			   drmModeConnector *conn, struct modeset_dev *dev)
 {
 	drmModeEncoder *enc;
 	int i, j;
@@ -186,7 +188,7 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 			crtc_id = enc->crtc_id;
 			bool in_use = false;
 
-			for (iter = modeset_list; iter; iter = iter->next) {
+			for (iter = ctx->modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
 					in_use = true;
 					break;
@@ -234,7 +236,7 @@ static int drmprepare_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
 
 			/* check that no other device already uses this CRTC */
 			crtc_id = res->crtcs[j];
-			for (iter = modeset_list; iter; iter = iter->next) {
+			for (iter = ctx->modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
 					in_use = true;
 					break;
@@ -449,7 +451,8 @@ err_out:
 	return ret;
 }
 
-static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
+static int drmprepare_connector(struct platsch_ctx *ctx, int fd,
+				drmModeRes *res, drmModeConnector *conn,
 				struct modeset_dev *dev)
 {
 	int ret;
@@ -476,7 +479,7 @@ static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
 	      conn->connector_id, dev->width, dev->height, dev->format->name);
 
 	/* find a crtc for this connector */
-	ret = drmprepare_crtc(fd, res, conn, dev);
+	ret = drmprepare_crtc(ctx, fd, res, conn, dev);
 	if (ret) {
 		error("no valid crtc for connector #%u\n", conn->connector_id);
 		return ret;
@@ -493,12 +496,13 @@ static int drmprepare_connector(int fd, drmModeRes *res, drmModeConnector *conn,
 	return 0;
 }
 
-static int drmprepare(int fd)
+static int drmprepare(struct platsch_ctx *ctx, int fd)
 {
 	drmModeRes *res;
 	drmModeConnector *conn;
 	int i;
 	struct modeset_dev *dev;
+	bool root_node = true;
 	int ret;
 
 	/* retrieve resources */
@@ -534,7 +538,7 @@ static int drmprepare(int fd)
 		memset(dev, 0, sizeof(*dev));
 		dev->conn_id = conn->connector_id;
 
-		ret = drmprepare_connector(fd, res, conn, dev);
+		ret = drmprepare_connector(ctx, fd, res, conn, dev);
 		if (ret) {
 			if (ret != -ENOENT) {
 				error("Cannot setup device for connector #%u: %m\n",
@@ -547,8 +551,10 @@ static int drmprepare(int fd)
 
 		/* free connector data and link device into global list */
 		drmModeFreeConnector(conn);
-		dev->next = modeset_list;
-		modeset_list = dev;
+		dev->next = root_node ? NULL : ctx->modeset_list;
+		ctx->modeset_list = dev;
+
+		root_node = false;
 	}
 
 	/* free resources again */
@@ -576,6 +582,7 @@ int main(int argc, char *argv[])
 {
 	char **initsargv;
 	int drmfd;
+	struct platsch_ctx *ctx;
 	struct modeset_dev *iter;
 	bool pid1 = getpid() == 1;
 	const char *dir = "/usr/share/platsch";
@@ -617,6 +624,12 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx) {
+		error("Cannot allocate memory for platsch_ctx\n");
+		exit(1);
+	}
+
 	for (i = 0; i < 64; i++) {
 		struct drm_mode_card_res res = {0};
 		char *drmdev;
@@ -649,10 +662,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	ret = drmprepare(drmfd);
+	ret = drmprepare(ctx, drmfd);
 	assert(!ret);
 
-	for (iter = modeset_list; iter; iter = iter->next) {
+	for (iter = ctx->modeset_list; iter; iter = iter->next) {
 
 		/* draw first then set the mode */
 		draw_buffer(iter, dir, base);
@@ -678,6 +691,8 @@ int main(int argc, char *argv[])
 	ret = drmDropMaster(drmfd);
 	if (ret)
 		error("Failed to drop master on drm device\n");
+
+	free(ctx);
 
 execinit:
 	if (pid1) {
