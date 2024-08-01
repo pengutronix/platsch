@@ -10,10 +10,29 @@ project(
 
 libdrm_dep = dependency('libdrm', version : '>=2.4.112')
 
+install_headers('libplatsch.h')
+
+platsch_lib = both_libraries(
+  'platsch',
+  version : '0.1',
+  sources : ['libplatsch.c'],
+  dependencies : [libdrm_dep],
+  install : true
+)
+
+pkg_mod = import('pkgconfig')
+pkg_mod.generate(
+  name : 'libplatsch',
+  version : '0.1',
+  filebase : 'libplatsch',
+  description : 'A Library to build custom bootsplash applications.',
+  libraries : platsch_lib
+)
+
 executable(
   'platsch', 
-  sources : ['platsch.c', 'libplatsch.c'],
-  dependencies : [libdrm_dep],
+  sources : ['platsch.c'],
+  link_with : platsch_lib.get_static_lib(),
   install : true,
   install_dir : get_option('sbindir'),
 )
