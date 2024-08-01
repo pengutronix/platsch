@@ -76,6 +76,7 @@ struct modeset_dev {
 
 struct platsch_ctx {
 	struct modeset_dev *modeset_list;
+	int drmfd;
 };
 
 static void redirect_stdfd(void)
@@ -161,7 +162,7 @@ out:
 	return;
 }
 
-static int drmprepare_crtc(struct platsch_ctx *ctx, int fd, drmModeRes *res,
+static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
 			   drmModeConnector *conn, struct modeset_dev *dev)
 {
 	drmModeEncoder *enc;
@@ -173,7 +174,7 @@ static int drmprepare_crtc(struct platsch_ctx *ctx, int fd, drmModeRes *res,
 	if (conn->encoder_id) {
 		debug("connector #%d uses encoder #%d\n", conn->connector_id,
 		      conn->encoder_id);
-		enc = drmModeGetEncoder(fd, conn->encoder_id);
+		enc = drmModeGetEncoder(ctx->drmfd, conn->encoder_id);
 		assert(enc);
 		assert(enc->encoder_id == conn->encoder_id);
 	} else {
@@ -218,7 +219,7 @@ static int drmprepare_crtc(struct platsch_ctx *ctx, int fd, drmModeRes *res,
 	 * but let's be safe), iterate all other available encoders to find a
 	 * matching CRTC. */
 	for (i = 0; i < conn->count_encoders; ++i) {
-		enc = drmModeGetEncoder(fd, conn->encoders[i]);
+		enc = drmModeGetEncoder(ctx->drmfd, conn->encoders[i]);
 		if (!enc) {
 			error("Cannot retrieve encoder %u: %m\n",
 			      conn->encoders[i]);
@@ -451,9 +452,8 @@ err_out:
 	return ret;
 }
 
-static int drmprepare_connector(struct platsch_ctx *ctx, int fd,
-				drmModeRes *res, drmModeConnector *conn,
-				struct modeset_dev *dev)
+static int drmprepare_connector(struct platsch_ctx *ctx, drmModeRes *res,
+				drmModeConnector *conn, struct modeset_dev *dev)
 {
 	int ret;
 
@@ -479,14 +479,14 @@ static int drmprepare_connector(struct platsch_ctx *ctx, int fd,
 	      conn->connector_id, dev->width, dev->height, dev->format->name);
 
 	/* find a crtc for this connector */
-	ret = drmprepare_crtc(ctx, fd, res, conn, dev);
+	ret = drmprepare_crtc(ctx, res, conn, dev);
 	if (ret) {
 		error("no valid crtc for connector #%u\n", conn->connector_id);
 		return ret;
 	}
 
 	/* create a framebuffer for this CRTC */
-	ret = modeset_create_fb(fd, dev);
+	ret = modeset_create_fb(ctx->drmfd, dev);
 	if (ret) {
 		error("cannot create framebuffer for connector #%u\n",
 		      conn->connector_id);
@@ -496,7 +496,7 @@ static int drmprepare_connector(struct platsch_ctx *ctx, int fd,
 	return 0;
 }
 
-static int drmprepare(struct platsch_ctx *ctx, int fd)
+static int drmprepare(struct platsch_ctx *ctx)
 {
 	drmModeRes *res;
 	drmModeConnector *conn;
@@ -506,7 +506,7 @@ static int drmprepare(struct platsch_ctx *ctx, int fd)
 	int ret;
 
 	/* retrieve resources */
-	res = drmModeGetResources(fd);
+	res = drmModeGetResources(ctx->drmfd);
 	if (!res) {
 		error("cannot retrieve DRM resources: %m\n");
 		return -errno;
@@ -517,7 +517,7 @@ static int drmprepare(struct platsch_ctx *ctx, int fd)
 	/* iterate all connectors */
 	for (i = 0; i < res->count_connectors; ++i) {
 		/* get information for each connector */
-		conn = drmModeGetConnector(fd, res->connectors[i]);
+		conn = drmModeGetConnector(ctx->drmfd, res->connectors[i]);
 		if (!conn) {
 			error("Cannot retrieve DRM connector #%u: %m\n",
 				res->connectors[i]);
@@ -538,7 +538,7 @@ static int drmprepare(struct platsch_ctx *ctx, int fd)
 		memset(dev, 0, sizeof(*dev));
 		dev->conn_id = conn->connector_id;
 
-		ret = drmprepare_connector(ctx, fd, res, conn, dev);
+		ret = drmprepare_connector(ctx, res, conn, dev);
 		if (ret) {
 			if (ret != -ENOENT) {
 				error("Cannot setup device for connector #%u: %m\n",
@@ -658,11 +658,12 @@ int main(int argc, char *argv[])
 			continue;
 		} else {
 			/* Device found */
+			ctx->drmfd = drmfd;
 			break;
 		}
 	}
 
-	ret = drmprepare(ctx, drmfd);
+	ret = drmprepare(ctx);
 	assert(!ret);
 
 	for (iter = ctx->modeset_list; iter; iter = iter->next) {
@@ -673,14 +674,14 @@ int main(int argc, char *argv[])
 		if (iter->setmode) {
 			debug("set crtc\n");
 
-			ret = drmModeSetCrtc(drmfd, iter->crtc_id, iter->fb_id,
+			ret = drmModeSetCrtc(ctx->drmfd, iter->crtc_id, iter->fb_id,
 					     0, 0, &iter->conn_id, 1, &iter->mode);
 			if (ret)
 				error("Cannot set CRTC for connector #%u: %m\n",
 				      iter->conn_id);
 		} else {
 			debug("page flip\n");
-			ret = drmModePageFlip(drmfd, iter->crtc_id, iter->fb_id,
+			ret = drmModePageFlip(ctx->drmfd, iter->crtc_id, iter->fb_id,
 					      0, NULL);
 			if (ret)
 				error("Page flip failed on connector #%u: %m\n",
@@ -688,7 +689,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	ret = drmDropMaster(drmfd);
+	ret = drmDropMaster(ctx->drmfd);
 	if (ret)
 		error("Failed to drop master on drm device\n");
 
