@@ -77,6 +77,8 @@ struct modeset_dev {
 struct platsch_ctx {
 	struct modeset_dev *modeset_list;
 	int drmfd;
+	char *dir;
+	char *base;
 };
 
 static void redirect_stdfd(void)
@@ -629,6 +631,8 @@ int main(int argc, char *argv[])
 		error("Cannot allocate memory for platsch_ctx\n");
 		exit(1);
 	}
+	ctx->dir = strdup(dir);
+	ctx->base = strdup(base);
 
 	for (i = 0; i < 64; i++) {
 		struct drm_mode_card_res res = {0};
@@ -669,7 +673,7 @@ int main(int argc, char *argv[])
 	for (iter = ctx->modeset_list; iter; iter = iter->next) {
 
 		/* draw first then set the mode */
-		draw_buffer(iter, dir, base);
+		draw_buffer(iter, ctx->dir, ctx->base);
 
 		if (iter->setmode) {
 			debug("set crtc\n");
@@ -693,6 +697,8 @@ int main(int argc, char *argv[])
 	if (ret)
 		error("Failed to drop master on drm device\n");
 
+	free(ctx->dir);
+	free(ctx->base);
 	free(ctx);
 
 execinit:
