@@ -588,6 +588,8 @@ void platsch_draw(struct platsch_ctx *ctx)
 			if (ret)
 				error("Cannot set CRTC for connector #%u: %m\n",
 				      iter->conn_id);
+			else
+				iter->setmode = 0;
 		} else {
 			debug("page flip\n");
 			ret = drmModePageFlip(ctx->drmfd, iter->crtc_id, iter->fb_id,
