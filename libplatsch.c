@@ -105,8 +105,10 @@ static ssize_t readfull(int fd, void *buf, size_t count)
 	return ret;
 }
 
-static void draw_buffer(struct modeset_dev *dev, const char *dir, const char *base)
+static void platsch_draw_buffer(struct platsch_ctx *ctx, struct modeset_dev *dev)
 {
+	const char *base = ctx->base;
+	const char *dir = ctx->dir;
 	int fd_src;
 	char *filename;
 	ssize_t size;
@@ -146,8 +148,6 @@ static void draw_buffer(struct modeset_dev *dev, const char *dir, const char *ba
 
 out:
 	free(filename);
-
-	return;
 }
 
 static void platsch_custom_draw_buffer(struct platsch_ctx *ctx,
@@ -578,7 +578,7 @@ void platsch_draw(struct platsch_ctx *ctx)
 		if (ctx->custom_draw_buffer_cb)
 			platsch_custom_draw_buffer(ctx, iter);
 		else
-			draw_buffer(iter, ctx->dir, ctx->base);
+			platsch_draw_buffer(ctx, iter);
 
 		if (iter->setmode) {
 			debug("set crtc\n");
