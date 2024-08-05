@@ -581,6 +581,24 @@ void platsch_draw(struct platsch_ctx *ctx)
 struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
 {
 	struct platsch_ctx *ctx;
+	int ret;
+
+	ctx = platsch_alloc_ctx(dir, base);
+	if (!ctx)
+		return NULL;
+
+	ret = platsch_init_ctx(ctx);
+	if (ret) {
+		platsch_destroy_ctx(ctx);
+		return NULL;
+	}
+
+	return ctx;
+}
+
+struct platsch_ctx *platsch_alloc_ctx(const char *dir, const char *base)
+{
+	struct platsch_ctx *ctx;
 	int drmfd;
 	int ret;
 	int i;
@@ -632,10 +650,6 @@ struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
 		}
 	}
 
-	ret = drmprepare(ctx);
-	if (ret)
-		goto err_out;
-
 	return ctx;
 
 err_out:
@@ -644,6 +658,11 @@ err_out:
 	free(ctx);
 
 	return NULL;
+}
+
+int platsch_init_ctx(struct platsch_ctx *ctx)
+{
+	return drmprepare(ctx);
 }
 
 void platsch_destroy_ctx(struct platsch_ctx *ctx)
