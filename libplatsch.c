@@ -81,6 +81,8 @@ struct platsch_ctx {
 	int drmfd;
 	char *dir;
 	char *base;
+	custom_draw_cb custom_draw_buffer_cb;
+	void *custom_draw_priv;
 };
 
 static ssize_t readfull(int fd, void *buf, size_t count)
@@ -146,6 +148,22 @@ out:
 	free(filename);
 
 	return;
+}
+
+static void platsch_custom_draw_buffer(struct platsch_ctx *ctx,
+				       struct modeset_dev *mode)
+{
+	struct platsch_draw_buf buf = {
+		.width = mode->width,
+		.height = mode->height,
+		.stride = mode->stride,
+		.size = mode->size,
+		.format = mode->format->format,
+		.fb_id = mode->fb_id,
+		.fb = mode->map,
+	};
+
+	ctx->custom_draw_buffer_cb(&buf, ctx->custom_draw_priv);
 }
 
 static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
@@ -557,7 +575,10 @@ void platsch_draw(struct platsch_ctx *ctx)
 	for (iter = ctx->modeset_list; iter; iter = iter->next) {
 
 		/* draw first then set the mode */
-		draw_buffer(iter, ctx->dir, ctx->base);
+		if (ctx->custom_draw_buffer_cb)
+			platsch_custom_draw_buffer(ctx, iter);
+		else
+			draw_buffer(iter, ctx->dir, ctx->base);
 
 		if (iter->setmode) {
 			debug("set crtc\n");
@@ -576,6 +597,16 @@ void platsch_draw(struct platsch_ctx *ctx)
 				      iter->conn_id);
 		}
 	}
+}
+
+void platsch_register_custom_draw_cb(struct platsch_ctx *ctx, custom_draw_cb cb,
+				     void *priv)
+{
+	if (!ctx)
+		return;
+
+	ctx->custom_draw_buffer_cb = cb;
+	ctx->custom_draw_priv = priv;
 }
 
 struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
