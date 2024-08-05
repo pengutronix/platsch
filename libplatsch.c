@@ -266,11 +266,12 @@ static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
 	return -ENOENT;
 }
 
-static int modeset_create_fb(int fd, struct modeset_dev *dev)
+static int modeset_create_fb(struct platsch_ctx *ctx, struct modeset_dev *dev)
 {
 	struct drm_mode_create_dumb creq;
 	struct drm_mode_destroy_dumb dreq;
 	struct drm_mode_map_dumb mreq;
+	int fd = ctx->drmfd;
 	int ret;
 
 	/* create dumb buffer */
@@ -490,7 +491,7 @@ static int drmprepare_connector(struct platsch_ctx *ctx, drmModeRes *res,
 	}
 
 	/* create a framebuffer for this CRTC */
-	ret = modeset_create_fb(ctx->drmfd, dev);
+	ret = modeset_create_fb(ctx, dev);
 	if (ret) {
 		error("cannot create framebuffer for connector #%u\n",
 		      conn->connector_id);
