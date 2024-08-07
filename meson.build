@@ -16,6 +16,7 @@ platsch_lib = both_libraries(
   'platsch',
   version : '0.1',
   sources : ['libplatsch.c'],
+  gnu_symbol_visibility : 'hidden',
   dependencies : [libdrm_dep],
   install : true
 )
