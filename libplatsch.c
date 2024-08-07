@@ -651,9 +651,11 @@ void platsch_destroy_ctx(struct platsch_ctx *ctx)
 	struct modeset_dev *mode, *next;
 	int ret;
 
-	ret = drmDropMaster(ctx->drmfd);
-	if (ret)
-		error("Failed to drop master on drm device\n");
+	if (drmIsMaster(ctx->drmfd)) {
+		ret = drmDropMaster(ctx->drmfd);
+		if (ret)
+			error("Failed to drop master on drm device\n");
+	}
 
 	for (mode = ctx->modeset_list; mode;) {
 		next = mode->next;
