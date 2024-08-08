@@ -19,6 +19,6 @@ jobs:
 
     - name: Build
       run: |
-        meson setup build # enable -Dwerror=true later
+        meson setup -Dwerror=true build
         meson configure build
         meson compile -C build
