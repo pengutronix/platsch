@@ -1,7 +1,7 @@
 project(
   'platsch',
   'c',
-  version : '2024.06.0',
+  version : '2024.08.0',
   default_options : [
     'warning_level=2',
   ],
