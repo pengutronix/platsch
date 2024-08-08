@@ -2,7 +2,9 @@ platsch - Splash Screen Application
 ===================================
 
 platsch is a simple splash screen application meant to be run as PID 1
-(``init=/usr/sbin/platsch``).
+(``init=/usr/sbin/platsch``). The main logic is implemented in libplatsch which
+can be used by others to implement more advanced splash screen applications
+like an animated splash screen.
 
 The image to be displayed for each DRM connector is expected here::
 
