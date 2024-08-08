@@ -2,7 +2,9 @@ platsch - Splash Screen Application
 ===================================
 
 platsch is a simple splash screen application meant to be run as PID 1
-(``init=/usr/sbin/platsch``).
+(``init=/usr/sbin/platsch``). The main logic is implemented in libplatsch which
+can be used by others to implement more advanced splash screen applications
+like an animated splash screen.
 
 The image to be displayed for each DRM connector is expected here::
 
@@ -22,13 +24,6 @@ simply take over.
 Seamless transitions are possible (e.g. to *Weston* having the same image
 configured as background). Depending on the SoC used, the same format might be
 required to achieve that.
-
-For questions, feedback, patches, please send a mail to::
-
-  oss-tools@pengutronix.de
-
-Note: you must be subscribed to post to this mailing list. You can do so by
-sending an empty mail to ``oss-tools-subscribe@pengutronix.de``.
 
 Splash Image Generation
 -----------------------
@@ -121,14 +116,9 @@ Contributing
 
 The Git repository for this software can be found at::
 
-  https://git.pengutronix.de/cgit/platsch
+  https://github.com/pengutronix/platsch
 
-Any patches should be sent to the mailing list above. Please prefix your
-subject with "[PATCH platsch]" (when sending patches with Git, see the
-git-config manpage for the option ``format.subjectPrefix``).
-Mails sent to this mailing list are also archived at::
-
-  https://lore.pengutronix.de/oss-tools
+Contribution can be done via GitHub Pull-Requests.
 
 This project uses the Developer's Certificate of Origin, as stated in the file
 DCO bundled with this software, using the same process as for the Linux kernel::
