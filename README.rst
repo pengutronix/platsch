@@ -139,10 +139,3 @@ Compiling Instructions
 
     meson setup build
     meson compile -C build
-
-To ensure fast startup, ``platsch`` prefers using static libraries:
-
-.. code-block:: shell
-
-    meson setup -Dprefer_static=true build
-    meson compile -C build
