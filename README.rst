@@ -135,14 +135,22 @@ are in line with the DCO.
 Compiling Instructions
 ----------------------
 
+To compile ``platsch`` and ``libplatsch`` call:
+
 .. code-block:: shell
 
     meson setup build
     meson compile -C build
 
-To ensure fast startup, ``platsch`` prefers using static libraries:
+This compiles ``platsch`` with all dependent libraries linked dynamically
+except for ``libplatsch`` which is always static linked.
+
+To provide faster startup of ``platsch`` the dependent libraries can be linked
+static as well if available:
 
 .. code-block:: shell
 
     meson setup -Dprefer_static=true build
     meson compile -C build
+
+Be aware that the size increases from ~50k to ~110k.
