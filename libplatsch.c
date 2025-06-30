@@ -72,8 +72,11 @@ struct modeset_dev {
 	bool setmode;
 	drmModeModeInfo mode;
 	uint32_t fb_id;
-	uint32_t conn_id;
+	uint32_t *conn_id;
+	uint32_t conn_num;
+	uint32_t max_conn_num;
 	uint32_t crtc_id;
+	uint8_t global_encoder_idx;
 };
 
 struct platsch_ctx {
@@ -166,6 +169,33 @@ static void platsch_custom_draw_buffer(struct platsch_ctx *ctx,
 	ctx->custom_draw_buffer_cb(&buf, ctx->custom_draw_priv);
 }
 
+static void drmconnector_add(struct modeset_dev *dev, uint32_t connector_id)
+{
+	unsigned int i;
+
+	for (i = 0; i < dev->max_conn_num; i++) {
+		if (dev->conn_id[i] == 0)
+			break;
+	}
+
+	if (i == dev->max_conn_num) {
+		error("Failed to add connector-id: %u\n", connector_id);
+		return;
+	}
+
+	dev->conn_id[i] = connector_id;
+	dev->conn_num++;
+}
+
+/*
+ * Checks if a given encoder is a possible clone of a already added modeset_dev
+ * device.
+ */
+static bool is_possible_clone(drmModeEncoder *enc, struct modeset_dev *dev)
+{
+	return  !!(enc->possible_clones & (1 << dev->global_encoder_idx));
+}
+
 static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
 			   drmModeConnector *conn, struct modeset_dev *dev)
 {
@@ -231,9 +261,34 @@ static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
 		}
 		assert(enc->encoder_id == conn->encoders[i]);
 
+		/*
+		 * Get the global encoder idx first to be able to check for
+		 * possible clonse later.
+		 */
+		for (j = 0; j < res->count_encoders; j++) {
+			drmModeEncoder *tmp;
+
+			tmp = drmModeGetEncoder(ctx->drmfd, res->encoders[j]);
+			if (!tmp) {
+				error("Cannot retrieve encoder %u: %m\n",
+				      res->encoders[i]);
+				continue;
+			}
+
+			if (enc->encoder_id != tmp->encoder_id) {
+				drmModeFreeEncoder(tmp);
+				continue;
+			}
+
+			dev->global_encoder_idx = j;
+			drmModeFreeEncoder(tmp);
+			break;
+		}
+
 		/* iterate all global CRTCs */
 		for (j = 0; j < res->count_crtcs; ++j) {
 			bool in_use = false;
+			bool is_clone = false;
 
 			/* check whether this CRTC works with the encoder */
 			if (!(enc->possible_crtcs & (1 << j)))
@@ -243,18 +298,32 @@ static int drmprepare_crtc(struct platsch_ctx *ctx, drmModeRes *res,
 			crtc_id = res->crtcs[j];
 			for (iter = ctx->modeset_list; iter; iter = iter->next) {
 				if (iter->crtc_id == crtc_id) {
-					in_use = true;
+					if (is_possible_clone(enc, iter)) {
+						is_clone = true;
+						drmconnector_add(iter, conn->connector_id);
+					} else {
+						in_use = true;
+					}
 					break;
 				}
 			}
 
 			/* we have found a CRTC, so save it and return */
-			if (!in_use) {
+			if (!in_use && !is_clone) {
 				debug("encoder #%d will use crtc #%d\n",
 				      enc->encoder_id, crtc_id);
 				drmModeFreeEncoder(enc);
 				dev->crtc_id = crtc_id;
 				return 0;
+			} else if (is_clone) {
+				debug("[HW-CLONE] encoder #%d will use crtc #%d\n",
+				      enc->encoder_id, crtc_id);
+				drmModeFreeEncoder(enc);
+				/*
+				 * Needs to be different than ENOENT for further
+				 * processing
+				 */
+				return -EEXIST;
 			}
 
 		}
@@ -486,7 +555,9 @@ static int drmprepare_connector(struct platsch_ctx *ctx, drmModeRes *res,
 	/* find a crtc for this connector */
 	ret = drmprepare_crtc(ctx, res, conn, dev);
 	if (ret) {
-		error("no valid crtc for connector #%u\n", conn->connector_id);
+		/* EEXIST -> clone mode detected */
+		if (ret != -EEXIST)
+			error("no valid crtc for connector #%u\n", conn->connector_id);
 		return ret;
 	}
 
@@ -540,14 +611,23 @@ static int drmprepare(struct platsch_ctx *ctx)
 			      res->connectors[i]);
 			continue;
 		}
-		dev->conn_id = conn->connector_id;
+
+		/*
+		 * We don't know if all connectors belong to the same CRTC,
+		 * e.g. to implement a HW clone. Therefore alloc max. possible
+		 * connector array which can be passed to drmSetMode later.
+		 */
+		dev->conn_id = calloc(res->count_connectors, sizeof(uint32_t));
+		dev->max_conn_num = res->count_connectors;
+		drmconnector_add(dev, conn->connector_id);
 
 		ret = drmprepare_connector(ctx, res, conn, dev);
 		if (ret) {
-			if (ret != -ENOENT) {
+			if (ret != -ENOENT && ret != -EEXIST) {
 				error("Cannot setup device for connector #%u: %m\n",
 				      res->connectors[i]);
 			}
+			free(dev->conn_id);
 			free(dev);
 			drmModeFreeConnector(conn);
 			continue;
@@ -585,10 +665,11 @@ void platsch_draw(struct platsch_ctx *ctx)
 			debug("set crtc\n");
 
 			ret = drmModeSetCrtc(ctx->drmfd, iter->crtc_id, iter->fb_id,
-					     0, 0, &iter->conn_id, 1, &iter->mode);
+					     0, 0, iter->conn_id, iter->conn_num,
+					     &iter->mode);
 			if (ret)
 				error("Cannot set CRTC for connector #%u: %m\n",
-				      iter->conn_id);
+				      iter->conn_id[0]);
 			else
 				iter->setmode = 0;
 		} else {
@@ -597,7 +678,7 @@ void platsch_draw(struct platsch_ctx *ctx)
 					      0, NULL);
 			if (ret)
 				error("Page flip failed on connector #%u: %m\n",
-				      iter->conn_id);
+				      iter->conn_id[0]);
 		}
 	}
 }
