@@ -113,8 +113,28 @@ int main(int argc, char *argv[])
 	}
 
 	ctx = platsch_create_ctx(dir, base);
-	if (!ctx)
+	if (!ctx) {
+		/* If we're PID 1, do NOT die on missing DRM. Hand off to real init. */
+		error("platsch: no DRM device found, continuing without splash\n");
+		if (pid1) {
+			initsargv = calloc(argc + 1, sizeof(argv[0]));
+			if (!initsargv) {
+				error("failed to allocate argv for init\n");
+				return EXIT_FAILURE;
+			}
+			memcpy(initsargv, argv, argc * sizeof(argv[0]));
+			initsargv[0] = "/sbin/init";
+			initsargv[argc] = NULL;
+
+			execv("/sbin/init", initsargv);
+			error("failed to exec init: %m\n");
+			/* If exec fails, we have to return non-zero; kernel will panic anyway. */
+			return EXIT_FAILURE;
+		}
+
+		/* Not PID 1: keep current behaviour (useful for diagnostics in user space) */
 		return EXIT_FAILURE;
+	}
 
 	platsch_draw(ctx);
 
