@@ -57,6 +57,7 @@ static struct option longopts[] =
 	{ "help",      no_argument,       0, 'h' },
 	{ "directory", required_argument, 0, 'd' },
 	{ "basename",  required_argument, 0, 'b' },
+	{ "qoi",       no_argument,       0, 'q' },
 	{ NULL,        0,                 0, 0   }
 };
 
@@ -64,7 +65,7 @@ static void usage(const char *prog)
 {
 	error("Usage:\n"
 	      "%s [-d|--directory <dir>] [-b|--basename <name>]\n"
-	      "   [-h|--help]\n",
+	      "   [-q|--qoi] [-h|--help]\n",
 	      prog);
 }
 
@@ -73,6 +74,7 @@ int main(int argc, char *argv[])
 	char **initsargv;
 	struct platsch_ctx *ctx;
 	bool pid1 = getpid() == 1;
+	bool qoi = false;
 	const char *dir = NULL;
 	const char *base = NULL;
 	const char *env;
@@ -86,14 +88,21 @@ int main(int argc, char *argv[])
 	if (env)
 		base = env;
 
+	env = getenv("platsch_qoi");
+	if (env)
+		qoi = strcmp(env, "0") != 0;
+
 	if (!pid1) {
-		while ((c = getopt_long(argc, argv, "hd:b:", longopts, NULL)) != EOF) {
+		while ((c = getopt_long(argc, argv, "hd:b:q", longopts, NULL)) != EOF) {
 			switch(c) {
 			case 'd':
 				dir = optarg;
 				break;
 			case 'b':
 				base = optarg;
+				break;
+			case 'q':
+				qoi = true;
 				break;
 			case '?':
 				/* ‘getopt_long’ already printed an error message. */
@@ -115,6 +124,8 @@ int main(int argc, char *argv[])
 	ctx = platsch_create_ctx(dir, base);
 	if (!ctx)
 		return EXIT_FAILURE;
+
+	platsch_set_qoi(ctx, qoi);
 
 	platsch_draw(ctx);
 
