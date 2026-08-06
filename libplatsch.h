@@ -1,6 +1,7 @@
 #ifndef __LIBPLATSCH_H__
 #define __LIBPLATSCH_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #if __GNUC__ >= 4
@@ -23,6 +24,7 @@ struct platsch_draw_buf {
 
 typedef void (*custom_draw_cb)(struct platsch_draw_buf *buf, void *priv);
 
+LIBPLATSCH_API void platsch_set_qoi(struct platsch_ctx *ctx, bool qoi);
 LIBPLATSCH_API void platsch_draw(struct platsch_ctx *ctx);
 LIBPLATSCH_API void platsch_register_custom_draw_cb(struct platsch_ctx *ctx,
 						    custom_draw_cb cb, void *priv);

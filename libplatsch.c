@@ -40,6 +40,8 @@
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
 
+#include <qoi.h>
+
 #include "libplatsch.h"
 
 #define debug(fmt, ...) printf("%s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
@@ -81,6 +83,7 @@ struct platsch_ctx {
 	int drmfd;
 	char *dir;
 	char *base;
+	bool qoi;
 	custom_draw_cb custom_draw_buffer_cb;
 	void *custom_draw_priv;
 };
@@ -105,6 +108,91 @@ static ssize_t readfull(int fd, void *buf, size_t count)
 	return ret;
 }
 
+/*
+ * In contrast to the raw images there is only a single QOI image per basename:
+ * geometry and colors are described by the image itself. It is converted to
+ * the format of the framebuffer while being drawn, centered and clipped if
+ * image and mode geometry differ.
+ */
+static void platsch_draw_qoi_buffer(struct platsch_ctx *ctx,
+				    struct modeset_dev *dev)
+{
+	const char *base = ctx->base;
+	const char *dir = ctx->dir;
+	const unsigned char *pixels;
+	int64_t xoff, yoff;
+	char *filename;
+	qoi_desc desc;
+	uint32_t x, y;
+	int ret;
+
+	switch (dev->format->format) {
+	case DRM_FORMAT_RGB565:
+	case DRM_FORMAT_XRGB8888:
+		break;
+	default:
+		error("Cannot draw QOI images to %s\n", dev->format->name);
+		return;
+	}
+
+	ret = asprintf(&filename, "%s/%s.qoi", dir, base);
+	if (ret < 0) {
+		error("Failed to allocate filename buffer\n");
+		return;
+	}
+
+	/* the supported formats have no alpha channel, so ask for RGB */
+	pixels = qoi_read(filename, &desc, 3);
+	if (!pixels) {
+		error("Failed to read QOI image %s\n", filename);
+		goto out;
+	}
+
+	debug("drawing %s (%ux%u) to %ux%u@%s\n", filename, desc.width,
+	      desc.height, dev->width, dev->height, dev->format->name);
+
+	xoff = ((int64_t)dev->width - desc.width) / 2;
+	yoff = ((int64_t)dev->height - desc.height) / 2;
+
+	for (y = 0; y < desc.height; y++) {
+		const unsigned char *src = pixels + (size_t)y * desc.width * 3;
+		int64_t dsty = (int64_t)y + yoff;
+		void *line;
+
+		if (dsty < 0 || dsty >= dev->height)
+			continue;
+
+		line = (unsigned char *)dev->map + dsty * dev->stride;
+
+		for (x = 0; x < desc.width; x++) {
+			const unsigned char *px = src + (size_t)x * 3;
+			int64_t dstx = (int64_t)x + xoff;
+
+			if (dstx < 0 || dstx >= dev->width)
+				continue;
+
+			switch (dev->format->format) {
+			case DRM_FORMAT_RGB565:
+				*((uint16_t *)line + dstx) =
+					(uint16_t)((px[0] & 0xf8) << 8 |
+						   (px[1] & 0xfc) << 3 |
+						   px[2] >> 3);
+				break;
+			case DRM_FORMAT_XRGB8888:
+				*((uint32_t *)line + dstx) =
+					(uint32_t)px[0] << 16 |
+					(uint32_t)px[1] << 8 |
+					(uint32_t)px[2];
+				break;
+			}
+		}
+	}
+
+	free((void *)pixels);
+out:
+	free(filename);
+}
+
 static void platsch_draw_buffer(struct platsch_ctx *ctx, struct modeset_dev *dev)
 {
 	const char *base = ctx->base;
@@ -113,6 +201,11 @@ static void platsch_draw_buffer(struct platsch_ctx *ctx, struct modeset_dev *dev
 	char *filename;
 	ssize_t size;
 	int ret;
+
+	if (ctx->qoi) {
+		platsch_draw_qoi_buffer(ctx, dev);
+		return;
+	}
 
 	/*
 	 * make it easy and load a raw file in the right format instead of
@@ -610,6 +703,14 @@ void platsch_register_custom_draw_cb(struct platsch_ctx *ctx, custom_draw_cb cb,
 
 	ctx->custom_draw_buffer_cb = cb;
 	ctx->custom_draw_priv = priv;
+}
+
+void platsch_set_qoi(struct platsch_ctx *ctx, bool qoi)
+{
+	if (!ctx)
+		return;
+
+	ctx->qoi = qoi;
 }
 
 struct platsch_ctx *platsch_create_ctx(const char *dir, const char *base)
