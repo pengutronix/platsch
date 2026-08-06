@@ -15,7 +15,7 @@ install_headers('libplatsch.h')
 platsch_lib = both_libraries(
   'platsch',
   version : '0.1',
-  sources : ['libplatsch.c'],
+  sources : ['libplatsch.c', 'qoi-impl.c'],
   gnu_symbol_visibility : 'hidden',
   dependencies : [libdrm_dep],
   install : true
