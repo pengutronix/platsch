@@ -16,6 +16,12 @@ defaults to ``RGB565``. See below how to change that behavior.
 Splash screen images must have the specified resolution and format. See
 below how to generate them.
 
+In addition to the raw image formats, platsch supports the
+`QOI <https://qoiformat.org/>`_ format. QOI splash images don't have size
+restrictions nor must the size be encoded into the splash filename. The splash
+image is always centered on the device display. The splash image is cropped if
+the splash image resolution is larger than the display resolution.
+
 After displaying the splash screen(s), platsch forks, sending its child to
 sleep to keep the DRM device open and the splash image(s) on the display(s).
 Finally platsch gives PID 1 to ``/sbin/init``. Later another application can
@@ -66,12 +72,22 @@ file::
     bmp:- | tail -c $((1920*1080*(8+8+8+8)/8)) > \
     splash-1920x1080-XRGB8888.bin
 
+QOI
+^^^
+
+This converts a png file into a qoi file. The qoi resolution follows the png
+resolution::
+
+  #!/bin/bash
+  magick splash.png splash.qoi
+
 Configuration
 -------------
 
 The directory searched for the splash images (default: ``/usr/share/platsch``),
-as well as the image files' basename (default: ``splash``) can be controlled via
-the environment variables ``platsch_directory`` and ``platsch_basename`` (which
+as well as the image files' basename (default: ``splash``) and the QOI mode
+(default: ``0``) can be controlled via the environment variables
+``platsch_directory``, ``platsch_basename`` and ``platsch_qoi`` (which
 in the case of PID != 1 would be overridden by the corresponding commandline
 parameters, see further downwards).
 
@@ -109,7 +125,10 @@ couple of command line arguments:
 
 ``--directory`` or ``-d`` sets the directory containing the splash screens.
 
-``--basename`` or ``-b`` sets the prefix of the splash screen file names.
+``--basename`` or ``-b`` sets the prefix of the splash screen file names. This
+is the filename (without the .qoi suffix) in case of QOI.
+
+``--qoi`` or ``-q`` to enable QOI mode.
 
 Contributing
 ------------
